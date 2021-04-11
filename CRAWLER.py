@@ -19,35 +19,41 @@ https://github.com/safteinzz/WebCrawler
 #         ~CONSTANTES
 # =============================================================================
 
-ICOENLACE = 'icono.png'
+ICOENLACE = 'safteinzz.ico'
 GUIENLACE = 'interfazCrawling.ui'
 
 # =============================================================================
 #         ~IMPORTS
 # =============================================================================
-import sys
+#Relacionado con el scrapping
+import requests, re
 from bs4 import BeautifulSoup
-import time, requests, re
-from queue import Queue, Empty
-from threading import Thread
-from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urljoin, urlparse
 
 #Datasets y models
 from pandasmodel import PandasModel
 import pandas as pd
 
-from qtpy.QtCore import Qt, QFileSystemWatcher, QSettings, Signal
+#Relacionado con concurrencia
+import time 
+from queue import Queue, Empty
+
+#Concurrencia
+from qtpy.QtCore import Signal
+from concurrent.futures import ThreadPoolExecutor
+from threading import Thread
 
 # --- Interfaz
+#Lanzamiento
+import sys
 #Ventana
 from PyQt5 import uic
 #Messagebox
 import ctypes
 #PyQT5
-from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5 import QtGui
 #Widgets pyQT5
-from PyQt5.QtWidgets import QMainWindow, QApplication
+from PyQt5.QtWidgets import QFileDialog, QMainWindow, QApplication
 #Importar interfaz
 Ui_MainWindow, QtBaseClass = uic.loadUiType(GUIENLACE)
 
@@ -71,6 +77,32 @@ Ui_MainWindow, QtBaseClass = uic.loadUiType(GUIENLACE)
 def Messagebox(text, title, style):
     return ctypes.windll.user32.MessageBoxW(0, text, title, style)  
 
+# =============================================================================
+# ~Seleccionar Ruta de fichero/carpeta   
+#
+#    @filtro => Sera el tipo de extension
+#    @titulo  => Titulo de la ventana
+#    @guardar => Booleano para saber si se quiere cargar o guardar
+#    - 1 = guardar
+#    - 0 = cargar
+#    @carpetas => Booleano para saber si se quiere carpetas o archivos
+#    - 1 = carpetas
+#    - 0 = ficheros
+#    Ejemplo filtro: "xls(*.xls);;csv(*.csv)"  
+#
+# ============================================================================= 
+def seleccionarFichero(filtro, titulo, guardar, carpetas):
+    qFD = QFileDialog()
+    if carpetas == 1:
+        return QFileDialog.getExistingDirectory(qFD, titulo, "", QFileDialog.ShowDirsOnly)
+    else:        
+        if guardar == 0:                   
+            return QFileDialog.getOpenFileName(qFD, titulo, "",filtro)
+        elif guardar == 1:
+            return QFileDialog.getSaveFileName(qFD, titulo, "",filtro)
+
+
+
 # -----------------------------------------------------------------------------
 # ~Clase enlace
 # =============================================================================
@@ -88,23 +120,24 @@ class CrawlerConcurrente:
         self.parametro_url = "{}://{}".format(urlParsed.scheme, urlParsed.netloc)
         self.aBuscar = termino 
         self.enlacesEncontrados = [] #Lista de coincidencias
-        
         self.colaCrawl = Queue(20)
         self.workers = ThreadPoolExecutor(max_workers=8)
-        
         enlace = Enlace(self.parametro_url, "Parametro a buscar")
         self.colaCrawl.put(enlace)
         
     def BuscarCoincidencias(self, html):
+#        Guardar html y buscar el termino en cualquier lado
         soup = BeautifulSoup(html, 'html.parser')
         links = soup.find_all('a',text=re.compile("\w*" + self.aBuscar + "\w*", re.UNICODE))
         for link in links:            
             url = link['href']
-            texto = link.get_text().strip()
-            if url.startswith('/'): url = urljoin(self.parametro_url, url)
-            if any(x.url == url for x in self.enlacesEncontrados): return
+#            Quitar espacios en blanco de derecha e izquierda
+            texto = link.get_text().strip()            
+#            Formar url
+            if url.startswith('/'): url = urljoin(self.parametro_url, url)            
+#            Guardar enlace y meter en cola
             enlace = Enlace(url,texto)
-            self.colaCrawl.put(enlace)            
+            self.colaCrawl.put(enlace)
         
     def scrapWeb(self, url):
         try:
@@ -118,18 +151,24 @@ class CrawlerConcurrente:
         if result and result.status_code == 200:
             self.BuscarCoincidencias(result.text)
                    
-    def runCC(this, self):
-        print("Buscando el termino '" + this.aBuscar + "' en " + this.parametro_url)
+    def runCC(this, self):  #this es CC, self es mainClass
+#        print("Buscando el termino '" + this.aBuscar + "' en " + this.parametro_url)  #debug
         done = False
+#        Resetear index para limpiar busquedas pasadas
+        self.model.df = self.model.df.iloc[0:0]
         while not done:            
             try:
-                enlace = this.colaCrawl.get(timeout=5)                
-                if any(x.url == enlace.url for x in this.enlacesEncontrados): continue 
+#                Sacar enlace de la cola
+                enlace = this.colaCrawl.get(timeout=5)         
+#                Comprobar paths de las urls, no podemos comprobar urls ya que podrian tener netlocs diferentes con paths iguales
+                if any(urlparse(x.url).path == urlparse(enlace.url).path for x in this.enlacesEncontrados): continue              
             
+#                Meter en el dataframe del tableview en enlace
                 if len(this.enlacesEncontrados) > 0:                 
                     df = pd.DataFrame([[enlace.texto,enlace.url]], columns=('Enlace', 'URL'))
                     self.updateProgress.emit(df)
                 
+#                Meter enlace a la cola de enlaces vistados
                 this.enlacesEncontrados.append(enlace)
                 
 #                Scrap workers
@@ -156,6 +195,7 @@ class CrawlerConcurrente:
 # =============================================================================
 class mainClass(QMainWindow):
     
+#    Signal para hacer updates en tiempo real al dataframe del tableview
     updateProgress = Signal(pd.DataFrame)
     
     def __init__(self):
@@ -202,13 +242,23 @@ class mainClass(QMainWindow):
         self.ui.lEstadoActual.setText('Buscando...')
         mainWorker = Thread(target=cc.runCC, args=(self, ))
         mainWorker.start()
-#        cc.runCC(self)
         
 # =============================================================================
 #     ~Evento Exportar coincidencias  
 # =============================================================================
     def pBExportarClicked( self ):
-        print("sin hacer")
+        rutaGuardado = seleccionarFichero("txt(*.txt);;csv(*.csv)", "Seleccionar donde guardar fichero", 1, 0)
+        if rutaGuardado[1] == 'csv(*.csv)':
+            self.model.df.to_csv(rutaGuardado[0], header = True,index = False, encoding='utf-8') 
+        else:
+            dfModel = self.model.df
+            with open(rutaGuardado[0], 'a') as f:
+                f.write(
+                    dfModel.to_string(header = True,index = False)
+                )
+        self.ui.lEstadoActual.setText('Exportado')
+            
+              
         
 # =============================================================================
 #     ~Evento checkbox limitar coincidencias 

@@ -8,6 +8,14 @@ class PandasModel(QtCore.QAbstractTableModel):
     def __init__(self, df = pd.DataFrame(), parent=None): 
         QtCore.QAbstractTableModel.__init__(self, parent=parent)
         self._df = df
+        
+    @property
+    def df(self):
+        return self._df
+    
+    @df.setter
+    def df(self, nuevoDF):
+        self._df = nuevoDF
 
     def headerData(self, section, orientation, role=QtCore.Qt.DisplayRole):
         if role != QtCore.Qt.DisplayRole:
