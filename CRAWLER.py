@@ -238,6 +238,13 @@ class mainClass(QMainWindow):
     def pBBuscarClicked( self ):
         termino = self.ui.tETermino.toPlainText()
         url = self.ui.tEURLPagina.toPlainText()
+        if not termino:
+            Messagebox('Debes introducir un termino', 'Error', 1)        
+            return  
+        if not url:
+            Messagebox('Debes introducir una URL', 'Error', 1)        
+            return  
+        
         cc = CrawlerConcurrente(url,termino)
         self.ui.lEstadoActual.setText('Buscando...')
         mainWorker = Thread(target=cc.runCC, args=(self, ))
