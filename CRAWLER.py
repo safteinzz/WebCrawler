@@ -19,8 +19,8 @@ https://github.com/safteinzz/WebCrawler
 #         ~CONSTANTES
 # =============================================================================
 
-ICOENLACE = 'safteinzz.ico'
-GUIENLACE = 'interfazCrawling.ui'
+ICOENLACE = 'resources/safteinzz.ico'
+GUIENLACE = 'resources/interfazCrawling.ui'
 
 # =============================================================================
 #         ~IMPORTS
@@ -31,7 +31,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 
 #Datasets y models
-from pandasmodel import PandasModel
+from resources.pandasmodel import PandasModel
 import pandas as pd
 
 #Relacionado con concurrencia
