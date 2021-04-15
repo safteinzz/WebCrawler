@@ -14,6 +14,7 @@ https://github.com/safteinzz/WebCrawler
 #            https://docs.python.org/3/library/queue.html
 #            https://stackoverflow.com/questions/9371114/check-if-list-of-objects-contain-an-object-with-a-certain-attribute-value/9371143#9371143
 #            https://doc.qt.io/archives/qt-4.8/qspinbox.html
+#            https://stackoverflow.com/questions/61351844/difference-between-multiprocessing-asyncio-and-concurrency-futures-in-python
 #
 # =============================================================================
 #         ~CONSTANTES
@@ -158,6 +159,11 @@ class CrawlerConcurrente:
         self.model.df = self.model.df.iloc[0:0]
         while not done:            
             try:
+#                Limitar coincidencias
+                if self.ui.cBLimitarCoincidencias.isChecked():
+                    if len(this.enlacesEncontrados) - 1 == self.ui.sBCoincidencias.value():
+                        raise Empty()
+                        
 #                Sacar enlace de la cola
                 enlace = this.colaCrawl.get(timeout=5)         
 #                Comprobar paths de las urls, no podemos comprobar urls ya que podrian tener netlocs diferentes con paths iguales
@@ -174,18 +180,12 @@ class CrawlerConcurrente:
 #                Scrap workers
                 worker = this.workers.submit(this.scrapWeb, enlace.url)
                 worker.add_done_callback(this.scrapeCallback)
-                time.sleep(0.5)
-                
-#                Limitar coincidencias
-                if self.ui.cBLimitarCoincidencias.isChecked():
-                    if len(this.enlacesEncontrados) - 1 == self.ui.sBCoincidencias.value():
-                        raise Empty()
+                time.sleep(0.5)    
                     
             except Empty:
                 self.ui.lEstadoActual.setText('Busqueda finalizada')
                 done = True                
-                return
-            
+                return 
             except Exception as e:
                 print(e)
                 continue
@@ -255,6 +255,12 @@ class mainClass(QMainWindow):
 # =============================================================================
     def pBExportarClicked( self ):
         rutaGuardado = seleccionarFichero("txt(*.txt);;csv(*.csv)", "Seleccionar donde guardar fichero", 1, 0)
+        if not rutaGuardado[0]:
+            Messagebox('Debes seleccionar donde guardar el fichero', 'Error', 1)        
+            return
+        if self.model.df.shape[0] < 1:
+            Messagebox('Primero debes hacer un crawling', 'Error', 1)        
+            return          
         if rutaGuardado[1] == 'csv(*.csv)':
             self.model.df.to_csv(rutaGuardado[0], header = True,index = False, encoding='utf-8') 
         else:
